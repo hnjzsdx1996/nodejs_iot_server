@@ -18,6 +18,7 @@
   "homepage": "https://github.com/hnjzsdx1996/nodejs_iot_server#readme",
   "description": "",
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "uuid": "^11.1.0"
   }
 }

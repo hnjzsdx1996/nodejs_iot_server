@@ -78,7 +78,15 @@ class NotificationCenterServer {
     }
 
     handleMessage(clientId, message) {
-        const { topic, data, uuid: messageUuid } = message;
+        const { topic, data, uuid: messageUuid, message_type, timestamp } = message;
+
+        // 处理pong消息
+        if (message_type === 'pong') {
+            const now = Date.now();
+            const rtt = now - timestamp;
+            console.log(`收到客户端PONG, 时间戳: ${timestamp}, RTT: ${rtt} ms`);
+            return;
+        }
 
         switch (topic) {
             case 'subscribe':
@@ -205,9 +213,11 @@ class NotificationCenterServer {
         const interval = setInterval(() => {
             if (this.clients.has(clientId)) {
                 this.sendMessage(clientId, {
-                    topic: 'heart_beat',
-                    data: Date.now(),
-                    uuid: uuidv4() // 为心跳消息生成UUID
+                    message_type: 'ping',
+                    message_id: uuidv4(),
+                    timestamp: Date.now(),
+                    need_replay: true,
+                    version: '1'
                 });
             } else {
                 clearInterval(interval);
