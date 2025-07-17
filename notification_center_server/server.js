@@ -176,12 +176,18 @@ class NotificationCenterServer {
                     const subscribers = this.subscriptions.get(sn).get(topic);
                     for (const clientId of subscribers) {
                         if (this.clients.has(clientId)) {
+                            let messageData;
+                            if (topic === 'aircraft_location') {
+                                messageData = { x: 1, y: 1, z: 3 };
+                            } else {
+                                messageData = { example: topic };
+                            }
                             this.sendMessage(clientId, {
                                 message_type: 'publish',
                                 message_id: uuidv4(),
                                 device_sn: sn,
                                 message_topic: topic,
-                                message_data: JSON.stringify({ example: topic }), // 这里可替换为实际推送数据
+                                message_data: JSON.stringify(messageData),
                                 timestamp: Date.now(),
                                 need_replay: false,
                                 version: '1'
