@@ -142,6 +142,71 @@ class NotificationCenterServer {
             }
             return;
         }
+
+        // 处理取消订阅
+        if (message_type === 'unsubscribe') {
+            try {
+                let unsubData = data;
+                if (!Array.isArray(unsubData) && message.items) {
+                    unsubData = message.items.map(item => ({ sn: item.device_sn, topic_list: item.topics }));
+                }
+                if (!Array.isArray(unsubData)) {
+                    throw new Error('取消订阅数据格式错误');
+                }
+                const results = [];
+                const client = this.clients.get(clientId);
+                for (const item of unsubData) {
+                    const { sn, topic_list } = item;
+                    if (!sn || !Array.isArray(topic_list)) {
+                        results.push({ sn, success: false, error: 'Invalid sn or topic_list' });
+                        continue;
+                    }
+                    // 移除订阅
+                    for (const topic of topic_list) {
+                        if (this.subscriptions.has(sn) && this.subscriptions.get(sn).has(topic)) {
+                            this.subscriptions.get(sn).get(topic).delete(clientId);
+                            // 如果没有客户端订阅该主题，删除主题并停止推送
+                            if (this.subscriptions.get(sn).get(topic).size === 0) {
+                                this.subscriptions.get(sn).delete(topic);
+                                // 停止推送
+                                const key = `${sn}_${topic}`;
+                                if (this.topicDataIntervals.has(key)) {
+                                    clearInterval(this.topicDataIntervals.get(key));
+                                    this.topicDataIntervals.delete(key);
+                                }
+                            }
+                        }
+                        if (client.subscriptions.has(sn)) {
+                            client.subscriptions.get(sn).delete(topic);
+                        }
+                    }
+                    // 如果该sn没有订阅了，清理订阅记录
+                    if (client.subscriptions.has(sn) && client.subscriptions.get(sn).size === 0) {
+                        client.subscriptions.delete(sn);
+                    }
+                    results.push({ sn, success: true, topics: topic_list });
+                }
+                // 回复取消订阅结果
+                this.sendMessage(clientId, {
+                    message_type: 'unsubscribe',
+                    message_id: message_id || '',
+                    message_data: JSON.stringify(results),
+                    timestamp: Date.now(),
+                    need_replay: false,
+                    version: version || '1'
+                });
+            } catch (error) {
+                this.sendMessage(clientId, {
+                    message_type: 'unsubscribe',
+                    message_id: message_id || '',
+                    message_data: JSON.stringify([{ success: false, error: error.message }]),
+                    timestamp: Date.now(),
+                    need_replay: false,
+                    version: version || '1'
+                });
+            }
+            return;
+        }
     }
 
     startHeartbeat(clientId) {
