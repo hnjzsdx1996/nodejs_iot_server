@@ -51,7 +51,8 @@ class NotificationCenterServer {
             console.log(`Client connected: ${clientId} from ${clientInfo.ip}`);
 
             // 开始发送心跳
-            this.startHeartbeat(clientId);
+            // 方便调试，先不发送心跳了
+            // this.startHeartbeat(clientId);
 
             // 设置消息处理器
             ws.on('message', (data) => {
@@ -78,7 +79,7 @@ class NotificationCenterServer {
     }
 
     handleMessage(clientId, message) {
-        const { topic, data, uuid: messageUuid, message_type, timestamp } = message;
+        const { topic, data, uuid: messageUuid, message_type, timestamp, message_id, version, notify_strategy, items } = message;
 
         // 处理pong消息
         if (message_type === 'pong') {
@@ -88,124 +89,58 @@ class NotificationCenterServer {
             return;
         }
 
-        switch (topic) {
-            case 'subscribe':
-                this.handleSubscribe(clientId, data, messageUuid);
-                break;
-            case 'unsubscribe':
-                this.handleUnsubscribe(clientId, data, messageUuid);
-                break;
-            default:
-                console.log(`Unknown topic: ${topic}`);
-                this.sendError(clientId, `Unknown topic: ${topic}`, messageUuid);
-        }
-    }
-
-    handleSubscribe(clientId, data, messageUuid) {
-        try {
-            if (!Array.isArray(data)) {
-                throw new Error('Data must be an array');
-            }
-
-            const results = [];
-            const client = this.clients.get(clientId);
-
-            for (const item of data) {
-                const { sn, topic_list } = item;
-                
-                if (!sn || !Array.isArray(topic_list)) {
-                    results.push({ sn, success: false, error: 'Invalid sn or topic_list' });
-                    continue;
+        // 处理新的订阅格式
+        if (message_type === 'subscribe') {
+            try {
+                if (!Array.isArray(items)) {
+                    throw new Error('items must be an array');
                 }
-
-                // 初始化订阅关系
-                if (!this.subscriptions.has(sn)) {
-                    this.subscriptions.set(sn, new Map());
-                }
-                if (!client.subscriptions.has(sn)) {
-                    client.subscriptions.set(sn, new Set());
-                }
-
-                // 添加订阅
-                for (const topic of topic_list) {
-                    if (!this.subscriptions.get(sn).has(topic)) {
-                        this.subscriptions.get(sn).set(topic, new Set());
+                const results = [];
+                const client = this.clients.get(clientId);
+                for (const item of items) {
+                    const { device_sn, topics } = item;
+                    if (!device_sn || !Array.isArray(topics)) {
+                        results.push({ device_sn, success: false, error: 'Invalid device_sn or topics' });
+                        continue;
                     }
-                    this.subscriptions.get(sn).get(topic).add(clientId);
-                    client.subscriptions.get(sn).add(topic);
-                }
-
-                // 开始推送该主题的数据
-                this.startTopicDataPush(sn, topic_list);
-
-                results.push({ sn, success: true, topics: topic_list });
-            }
-
-            // 发送订阅成功响应
-            this.sendMessage(clientId, {
-                topic: 'subscribe_response',
-                data: results,
-                uuid: messageUuid
-            });
-
-        } catch (error) {
-            console.error('Subscribe error:', error);
-            this.sendError(clientId, error.message, messageUuid);
-        }
-    }
-
-    handleUnsubscribe(clientId, data, messageUuid) {
-        try {
-            if (!Array.isArray(data)) {
-                throw new Error('Data must be an array');
-            }
-
-            const results = [];
-            const client = this.clients.get(clientId);
-
-            for (const item of data) {
-                const { sn, topic_list } = item;
-                
-                if (!sn || !Array.isArray(topic_list)) {
-                    results.push({ sn, success: false, error: 'Invalid sn or topic_list' });
-                    continue;
-                }
-
-                // 移除订阅
-                for (const topic of topic_list) {
-                    if (this.subscriptions.has(sn) && 
-                        this.subscriptions.get(sn).has(topic)) {
-                        this.subscriptions.get(sn).get(topic).delete(clientId);
-                        
-                        // 如果没有客户端订阅该主题，删除主题
-                        if (this.subscriptions.get(sn).get(topic).size === 0) {
-                            this.subscriptions.get(sn).delete(topic);
+                    // 初始化订阅关系
+                    if (!this.subscriptions.has(device_sn)) {
+                        this.subscriptions.set(device_sn, new Map());
+                    }
+                    if (!client.subscriptions.has(device_sn)) {
+                        client.subscriptions.set(device_sn, new Set());
+                    }
+                    // 添加订阅
+                    for (const topic of topics) {
+                        if (!this.subscriptions.get(device_sn).has(topic)) {
+                            this.subscriptions.get(device_sn).set(topic, new Set());
                         }
+                        this.subscriptions.get(device_sn).get(topic).add(clientId);
+                        client.subscriptions.get(device_sn).add(topic);
                     }
-
-                    if (client.subscriptions.has(sn)) {
-                        client.subscriptions.get(sn).delete(topic);
-                    }
+                    // 开始推送该主题的数据
+                    this.startTopicDataPush(device_sn, topics);
+                    results.push({ device_sn, success: true, topics });
                 }
-
-                // 如果该飞机没有订阅了，清理订阅记录
-                if (client.subscriptions.has(sn) && client.subscriptions.get(sn).size === 0) {
-                    client.subscriptions.delete(sn);
-                }
-
-                results.push({ sn, success: true, topics: topic_list });
+                // 发送订阅成功响应
+                this.sendMessage(clientId, {
+                    message_type: 'subscribe',
+                    message_id,
+                    timestamp: Date.now(),
+                    version: version || '1',
+                    results
+                });
+            } catch (error) {
+                console.error('Subscribe error:', error);
+                this.sendMessage(clientId, {
+                    message_type: 'subscribe',
+                    message_id,
+                    timestamp: Date.now(),
+                    version: version || '1',
+                    results: [{ success: false, error: error.message }]
+                });
             }
-
-            // 发送取消订阅成功响应
-            this.sendMessage(clientId, {
-                topic: 'unsubscribe_response',
-                data: results,
-                uuid: messageUuid
-            });
-
-        } catch (error) {
-            console.error('Unsubscribe error:', error);
-            this.sendError(clientId, error.message, messageUuid);
+            return;
         }
     }
 
@@ -227,28 +162,29 @@ class NotificationCenterServer {
         this.heartbeatIntervals.set(clientId, interval);
     }
 
+    // 修改推送数据结构
     startTopicDataPush(sn, topics) {
         for (const topic of topics) {
             const key = `${sn}_${topic}`;
-            
             // 如果已经在推送，跳过
             if (this.topicDataIntervals.has(key)) {
                 continue;
             }
-
             const interval = setInterval(() => {
                 // 获取订阅该主题的所有客户端
-                if (this.subscriptions.has(sn) && 
-                    this.subscriptions.get(sn).has(topic)) {
-                    
+                if (this.subscriptions.has(sn) && this.subscriptions.get(sn).has(topic)) {
                     const subscribers = this.subscriptions.get(sn).get(topic);
-                    
                     for (const clientId of subscribers) {
                         if (this.clients.has(clientId)) {
                             this.sendMessage(clientId, {
-                                topic: topic,
-                                data: topic, // 数据内容就是topic的名称
-                                uuid: uuidv4() // 为每个推送消息生成UUID
+                                message_type: 'publish',
+                                message_id: uuidv4(),
+                                device_sn: sn,
+                                message_topic: topic,
+                                message_data: JSON.stringify({ example: topic }), // 这里可替换为实际推送数据
+                                timestamp: Date.now(),
+                                need_replay: false,
+                                version: '1'
                             });
                         }
                     }
@@ -258,7 +194,6 @@ class NotificationCenterServer {
                     this.topicDataIntervals.delete(key);
                 }
             }, 2000); // 每2秒推送一次
-
             this.topicDataIntervals.set(key, interval);
         }
     }
