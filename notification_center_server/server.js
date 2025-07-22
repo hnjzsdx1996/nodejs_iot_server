@@ -243,7 +243,12 @@ class NotificationCenterServer {
                         if (this.clients.has(clientId)) {
                             let messageData;
                             if (topic === 'aircraft_location') {
-                                messageData = { x: 1, y: 1, z: 3 };
+                                messageData = { 
+                                    height: 0.0,      // 椭球高度
+                                    elevation: 0.0,   // 相对起飞点高度
+                                    longitude: 0.0,   // 经度
+                                    latitude: 0.0     // 纬度
+                                };
                             } else {
                                 messageData = { example: topic };
                             }
