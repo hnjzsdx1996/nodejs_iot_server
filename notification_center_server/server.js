@@ -137,6 +137,9 @@ class NotificationCenterServer {
                 timestamp: Date.now(),
                 results
             });
+
+            // 打印当前订阅信息
+            this.printSubscriptionInfo();
         }
     }
 
@@ -169,6 +172,23 @@ class NotificationCenterServer {
             }
         }
         this.clients.delete(clientId);
+    }
+
+    printSubscriptionInfo() {
+        console.log('\n=== 当前订阅信息 ===');
+        console.log(`连接客户端数: ${this.clients.size}`);
+        
+        if (this.subscriptions.size === 0) {
+            console.log('暂无订阅');
+        } else {
+            for (const [sn, topics] of this.subscriptions) {
+                console.log(`设备 ${sn}:`);
+                for (const [topic, clients] of topics) {
+                    console.log(`  - ${topic}: ${clients.size} 个客户端订阅`);
+                }
+            }
+        }
+        console.log('==================\n');
     }
 }
 
