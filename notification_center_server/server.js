@@ -2,6 +2,8 @@ const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 const https = require('https');
 const fs = require('fs');
+const http = require('http');
+const url = require('url');
 
 class NotificationCenterServer {
     constructor(port = 8080, useSSL = false) {
@@ -11,6 +13,7 @@ class NotificationCenterServer {
         this.subscriptions = new Map(); // 存储订阅关系: {sn: {topic: Set<clientId>}}
         this.heartbeatIntervals = new Map(); // 存储心跳定时器
         this.topicDataIntervals = new Map(); // 存储主题数据推送定时器
+        this.httpServer = null; // HTTP服务器实例
         
         this.initServer();
     }
@@ -27,13 +30,112 @@ class NotificationCenterServer {
             httpsServer.listen(this.port, () => {
                 console.log(`WSS Server running on port ${this.port}`);
             });
+            this.httpServer = httpsServer;
         } else {
             // 使用 WS 协议
             this.wss = new WebSocket.Server({ port: this.port });
             console.log(`WS Server running on port ${this.port}`);
+            
+            // 创建HTTP服务器来处理POST请求
+            this.httpServer = http.createServer((req, res) => {
+                this.handleHttpRequest(req, res);
+            });
+            this.httpServer.listen(this.port + 1, () => {
+                console.log(`HTTP Server running on port ${this.port + 1}`);
+            });
         }
 
         this.setupEventHandlers();
+    }
+
+    handleHttpRequest(req, res) {
+        // 设置CORS头
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-auth-token');
+
+        // 处理预检请求
+        if (req.method === 'OPTIONS') {
+            res.writeHead(200);
+            res.end();
+            return;
+        }
+
+        // 只处理POST请求
+        if (req.method !== 'POST') {
+            res.writeHead(405, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Method not allowed' }));
+            return;
+        }
+
+        // 检查URL路径
+        const parsedUrl = url.parse(req.url, true);
+        if (parsedUrl.pathname !== '/notification/api/v1/notifications') {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Not found' }));
+            return;
+        }
+
+        // 检查认证token
+        const authToken = parsedUrl.query['x-auth-token'] || req.headers['x-auth-token'];
+        if (authToken !== 'test') {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Unauthorized' }));
+            return;
+        }
+
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+
+        req.on('end', () => {
+            try {
+                const notificationData = JSON.parse(body);
+                const { device_sn, message_topic, message_data } = notificationData;
+
+                if (!device_sn || !message_topic) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Missing device_sn or message_topic' }));
+                    return;
+                }
+
+                // 发送消息给订阅了该设备该主题的客户端
+                this.sendNotificationToSubscribers(device_sn, message_topic, notificationData);
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                    success: true, 
+                    message: `Notification sent to subscribers of ${device_sn}:${message_topic}` 
+                }));
+
+            } catch (error) {
+                console.error('HTTP request parsing error:', error);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid JSON' }));
+            }
+        });
+    }
+
+    sendNotificationToSubscribers(device_sn, message_topic, notificationData) {
+        // 检查是否有客户端订阅了该设备和主题
+        if (this.subscriptions.has(device_sn) && 
+            this.subscriptions.get(device_sn).has(message_topic)) {
+            
+            const subscribers = this.subscriptions.get(device_sn).get(message_topic);
+            let sentCount = 0;
+
+            for (const clientId of subscribers) {
+                if (this.clients.has(clientId)) {
+                    this.sendMessage(clientId, notificationData);
+                    sentCount++;
+                }
+            }
+
+            console.log(`Sent notification to ${sentCount} clients for ${device_sn}:${message_topic}`);
+        } else {
+            console.log(`No subscribers found for ${device_sn}:${message_topic}`);
+        }
     }
 
     setupEventHandlers() {
@@ -124,8 +226,7 @@ class NotificationCenterServer {
                         this.subscriptions.get(device_sn).get(topic).add(clientId);
                         client.subscriptions.get(device_sn).add(topic);
                     }
-                    // 开始推送该主题的数据
-                    this.startTopicDataPush(device_sn, topics);
+                    // 不再自动开始推送，改为通过HTTP接口手动触发
                     results.push({ device_sn, success: true, topics });
                 }
                 // 发送订阅成功响应
@@ -553,9 +654,19 @@ process.on('SIGINT', () => {
         client.ws.close();
     }
     
+    // 关闭WebSocket服务器
     server.wss.close(() => {
-        console.log('Server closed');
-        process.exit(0);
+        console.log('WebSocket server closed');
+        
+        // 关闭HTTP服务器
+        if (server.httpServer) {
+            server.httpServer.close(() => {
+                console.log('HTTP server closed');
+                process.exit(0);
+            });
+        } else {
+            process.exit(0);
+        }
     });
 });
 
