@@ -244,10 +244,21 @@ class NotificationCenterServer {
                             let messageData;
                             if (topic === 'aircraft_location') {
                                 messageData = { 
-                                    height: 0.0,      // 椭球高度
-                                    elevation: 0.0,   // 相对起飞点高度
-                                    longitude: 0.0,   // 经度
-                                    latitude: 0.0     // 纬度
+                                    height: 1.1,      // 椭球高度
+                                    elevation: 2.2,   // 相对起飞点高度
+                                    longitude: 3.3,   // 经度
+                                    latitude: 4.4     // 纬度
+                                };
+                            } else if (topic === 'aircraft_speed') {
+                                messageData = { 
+                                    horizontal_speed: 12.3,
+                                    vertical_speed: 45.6,
+                                };
+                            } else if (topic === 'aircraft_attitude') {
+                                messageData = { 
+                                    attitude_head: 12.3,
+                                    attitude_pitch: 45.6,
+                                    attitude_roll: 45.6,
                                 };
                             } else {
                                 messageData = { example: topic };
