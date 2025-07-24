@@ -92,12 +92,18 @@ class NotificationCenterServer {
         // 处理新的订阅格式
         if (message_type === 'subscribe') {
             try {
-                if (!Array.isArray(items)) {
+                // 从 message_data 中获取 items，如果没有则从根级别获取
+                let itemsArray = items;
+                if (!Array.isArray(itemsArray) && message.message_data && Array.isArray(message.message_data.items)) {
+                    itemsArray = message.message_data.items;
+                }
+                
+                if (!Array.isArray(itemsArray)) {
                     throw new Error('items must be an array');
                 }
                 const results = [];
                 const client = this.clients.get(clientId);
-                for (const item of items) {
+                for (const item of itemsArray) {
                     const { device_sn, topics } = item;
                     if (!device_sn || !Array.isArray(topics)) {
                         results.push({ device_sn, success: false, error: 'Invalid device_sn or topics' });
@@ -259,6 +265,168 @@ class NotificationCenterServer {
                                     attitude_head: 12.3,
                                     attitude_pitch: 45.6,
                                     attitude_roll: 45.6,
+                                };
+                            } else if (topic === 'device_osd') {
+                                messageData = {
+                                    "host": {
+                                        "81-0-0": {
+                                            "gimbal_pitch": 0,
+                                            "gimbal_roll": 0,
+                                            "gimbal_yaw": 121.08843265722754,
+                                            "payload_index": "81-0-0",
+                                            "thermal_current_palette_style": 0,
+                                            "thermal_gain_mode": 2,
+                                            "thermal_global_temperature_max": 19.100000381469727,
+                                            "thermal_global_temperature_min": 5.300000190734863,
+                                            "thermal_isotherm_lower_limit": -20,
+                                            "thermal_isotherm_state": 0,
+                                            "thermal_isotherm_upper_limit": 150,
+                                            "zoom_factor": 0.5678233438485805
+                                        },
+                                        "activation_time": 0,
+                                        "attitude_head": 121,
+                                        "attitude_pitch": -4.3,
+                                        "attitude_roll": 0.9,
+                                        "battery": {
+                                            "batteries": [
+                                                {
+                                                    "capacity_percent": 81,
+                                                    "firmware_version": "26.03.08.49",
+                                                    "high_voltage_storage_days": 3,
+                                                    "index": 0,
+                                                    "loop_times": 520,
+                                                    "sn": "6Q7PL89DAP00H5",
+                                                    "sub_type": 0,
+                                                    "temperature": 41.9,
+                                                    "type": 0,
+                                                    "voltage": 15775
+                                                }
+                                            ],
+                                            "capacity_percent": 81,
+                                            "landing_power": 8,
+                                            "remain_flight_time": 1986,
+                                            "return_home_power": 25
+                                        },
+                                        "best_link_gateway": "6QCDL810020011",
+                                        "cameras": [
+                                            {
+                                                "camera_mode": 2,
+                                                "ir_metering_mode": 0,
+                                                "ir_metering_point": {
+                                                    "temperature": 0,
+                                                    "x": 0.5,
+                                                    "y": 0.5
+                                                },
+                                                "ir_zoom_factor": 2,
+                                                "liveview_world_region": {
+                                                    "bottom": 0.552438497543335,
+                                                    "left": 0.4323032796382904,
+                                                    "right": 0.5633704662322998,
+                                                    "top": 0.4231345057487488
+                                                },
+                                                "payload_index": "81-0-0",
+                                                "photo_state": 0,
+                                                "photo_storage_settings": ["vision"],
+                                                "record_time": 0,
+                                                "recording_state": 0,
+                                                "remain_photo_num": 9113,
+                                                "remain_record_duration": 0,
+                                                "screen_split_enable": false,
+                                                "wide_calibrate_farthest_focus_value": 36,
+                                                "wide_calibrate_nearest_focus_value": 66,
+                                                "wide_exposure_mode": 1,
+                                                "wide_exposure_value": 16,
+                                                "wide_focus_mode": 0,
+                                                "wide_focus_state": 0,
+                                                "wide_focus_value": 36,
+                                                "wide_iso": 3,
+                                                "wide_max_focus_value": 66,
+                                                "wide_min_focus_value": 35,
+                                                "wide_shutter_speed": 3,
+                                                "zoom_calibrate_farthest_focus_value": 36,
+                                                "zoom_calibrate_nearest_focus_value": 66,
+                                                "zoom_exposure_mode": 1,
+                                                "zoom_exposure_value": 16,
+                                                "zoom_factor": 6.999994214380596,
+                                                "zoom_focus_mode": 0,
+                                                "zoom_focus_state": 0,
+                                                "zoom_focus_value": 36,
+                                                "zoom_iso": 3,
+                                                "zoom_max_focus_value": 66,
+                                                "zoom_min_focus_value": 35,
+                                                "zoom_shutter_speed": 3
+                                            }
+                                        ],
+                                        "country": "CN",
+                                        "distance_limit_status": {
+                                            "distance_limit": 300,
+                                            "is_near_distance_limit": 0,
+                                            "state": 1
+                                        },
+                                        "elevation": 78.9,
+                                        "gear": 1,
+                                        "height": 128.22119750976563,
+                                        "height_limit": 80,
+                                        "home_distance": 0.08395953476428986,
+                                        "horizontal_speed": 0,
+                                        "is_near_area_limit": 1,
+                                        "is_near_height_limit": 1,
+                                        "latitude": 22.793217667699324,
+                                        "longitude": 114.35788532514945,
+                                        "maintain_status": {
+                                            "maintain_status_array": [
+                                                {
+                                                    "last_maintain_flight_sorties": 0,
+                                                    "last_maintain_flight_time": 0,
+                                                    "last_maintain_time": 0,
+                                                    "last_maintain_type": 1,
+                                                    "state": 0
+                                                },
+                                                {
+                                                    "last_maintain_flight_sorties": 0,
+                                                    "last_maintain_flight_time": 0,
+                                                    "last_maintain_time": 0,
+                                                    "last_maintain_type": 2,
+                                                    "state": 0
+                                                },
+                                                {
+                                                    "last_maintain_flight_sorties": 0,
+                                                    "last_maintain_flight_time": 0,
+                                                    "last_maintain_time": 0,
+                                                    "last_maintain_type": 3,
+                                                    "state": 0
+                                                }
+                                            ]
+                                        },
+                                        "mode_code": 3,
+                                        "night_lights_state": 0,
+                                        "obstacle_avoidance": {
+                                            "downside": 1,
+                                            "horizon": 1,
+                                            "upside": 1
+                                        },
+                                        "position_state": {
+                                            "gps_number": 32,
+                                            "is_fixed": 2,
+                                            "quality": 5,
+                                            "rtk_number": 48
+                                        },
+                                        "rc_lost_action": 2,
+                                        "rid_state": true,
+                                        "rth_altitude": 300,
+                                        "storage": {
+                                            "total": 60068000,
+                                            "used": 3161000
+                                        },
+                                        "total_flight_distance": 5213978.459460843,
+                                        "total_flight_sorties": 1099,
+                                        "total_flight_time": 612889.8263008446,
+                                        "track_id": "1e6cbb25-52b6-4de5-8db8-6f82af559d77",
+                                        "vertical_speed": 0,
+                                        "wind_direction": 4,
+                                        "wind_speed": 54
+                                    },
+                                    "sn": "1581F6Q8D242100CPKTJ"
                                 };
                             } else {
                                 messageData = { example: topic };
